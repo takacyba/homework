@@ -51,6 +51,7 @@ def find_latest_log(logger, config_file):
         file name of latest log file.
 
     """
+    latest_file_path = ''
     logger.info('parse config for LOG_DIR data...')
     log_dir = os.path.join(ROOT_DIR, config_file['LOG_DIR'])
     logger.info(f'set values LOG_DIR is {log_dir}')
@@ -59,11 +60,11 @@ def find_latest_log(logger, config_file):
         regex = re.compile('nginx-access-ui.log-.*(?:gz|[0-9]{8}$)')
         files = [i for i in os.listdir(log_dir) if regex.match(i)]
         latest_file = max(files)
+        latest_file_path = os.path.join(log_dir, latest_file)
+        logger.info(f'found the new last file: {latest_file}')
     except ValueError:
-        logger.info('No log files')
-        return 0
-    logger.info(f'found the new last file: {latest_file}')
-    return os.path.join(log_dir, latest_file)
+        pass
+    return latest_file_path
 
 
 def parse_log(logger, config_file, file):
@@ -185,6 +186,9 @@ def report_is_exist(config_file, file_name):
 def main(config_file, logger):
     config_file = config_file
     latest_file = find_latest_log(logger, config_file)
+    if not latest_file:
+        logger.info('No log files')
+        return
     if report_is_exist(config_file, latest_file):
         logger.info('have already analyzed the latest log')
         return
