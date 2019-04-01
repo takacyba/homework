@@ -82,37 +82,44 @@ def parse_log(logger, config_file, file):
     """
     logger.info(f'starting to parse the file {file}')
     opener = gzip.open if file.endswith('.gz') else open
-    urls = {}
     line_format = re.compile(
         b'.*((\"(GET|POST|PUT|HEAD) )(?P<url>.+)(http\/1\.[0-1]")).* (?P<request_time>\d+\.\d+)', re.IGNORECASE)
     with opener(file, 'rb') as f:
         logger.info('successfully read the file, start parsing')
-        counter = 0
+        parsed_lines = 0
         summary_lines = 0
-        requests_time = 0
         for line in f:
             summary_lines += 1
             data = re.search(line_format, line)
             if data:
-                datadict = data.groupdict()
-                url = datadict["url"].decode('UTF-8')
-                request_time = float(datadict["request_time"])
-                requests_time += request_time
-                try:
-                    urls[url].append(request_time)
-                except KeyError:
-                    urls[url] = [request_time]
-            else:
-                counter += 1
-        logger.info('successfully parse the file')
-    dropped = round(counter / summary_lines * 100, 3)
+                parsed_lines += 1
+                yield data, summary_lines, parsed_lines
+
+
+def aggregate_parse_values(logger, config_file, file):
+    urls = {}
+    requests_time = 0
+    cnt = 0
+    lines = 0
+    for data, summary_lines, parsed_lines in parse_log(logger, config, file):
+        lines = summary_lines
+        cnt = parsed_lines
+        datadict = data.groupdict()
+        url = datadict["url"].decode('UTF-8')
+        request_time = float(datadict["request_time"])
+        requests_time += request_time
+        try:
+            urls[url].append(request_time)
+        except KeyError:
+            urls[url] = [request_time]
+    dropped = round((lines-cnt) / lines * 100, 3)
     max_drop = config_file['MAX_DROP']
     if dropped > max_drop:
         logger.error(f'found more errors: {dropped}% than allowed:{max_drop}%')
         raise ValueError
     else:
         logger.info(f'founded {dropped}% errors, it is ok, allowed:{max_drop}%')
-    return urls, summary_lines, requests_time
+    return urls, lines, requests_time
 
 
 def calculate_report_metrics(logger, config_file, urls, summary_lines, requests_time):
@@ -192,7 +199,7 @@ def main(config_file, logger):
     if report_is_exist(config_file, latest_file):
         logger.info('have already analyzed the latest log')
         return
-    urls, summary_lines, requests_time = parse_log(logger, config_file, latest_file)
+    urls, summary_lines, requests_time = aggregate_parse_values(logger, config_file, latest_file)
     metrics = calculate_report_metrics(logger, config_file, urls, summary_lines, requests_time)
     generate_report(logger, config_file, metrics, latest_file)
 
