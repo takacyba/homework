@@ -180,36 +180,29 @@ def generate_report(logger, config_file, table, file_name):
             logger.info(f'have successfully formed a report to the path {report_path}')
 
 
-def main(config_file):
+def main(config_file, logger):
     config_file = config_file
-    logger = logger_setup(config_file)
-    try:
-        latest_file = find_latest_log(logger, config_file)
-        if not latest_file:
-            return
-        urls, summary_lines, requests_time = parse_log(logger, config_file, latest_file)
-        metrics = calculate_report_metrics(logger, config_file, urls, summary_lines, requests_time)
-        generate_report(logger, config_file, metrics, latest_file)
-    except Exception as e:
-        logger.exception(f"Exception occurred during program execution, reason: {e}")
+    latest_file = find_latest_log(logger, config_file)
+    if not latest_file:
+        return
+    urls, summary_lines, requests_time = parse_log(logger, config_file, latest_file)
+    metrics = calculate_report_metrics(logger, config_file, urls, summary_lines, requests_time)
+    generate_report(logger, config_file, metrics, latest_file)
 
 
 if __name__ == '__main__':
-    if len(sys.argv) > 1:
-        param_name = sys.argv[1]
-        if param_name == '--config':
-            try:
-                param_value = sys.argv[2]
-            except IndexError:
-                param_value = os.path.join(ROOT_DIR, 'default_config')
-            with open(param_value, 'r') as f:
-                try:
-                    new_config = json.load(f)
-                    for key, value in new_config.items():
-                        config[key] = value
-                except SyntaxError:
-                    pass
-        else:
-            raise ValueError('No such parameter')
-
-    main(config)
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--config', nargs='?', const=os.path.join(ROOT_DIR, 'default_config'))
+    args = parser.parse_args()
+    with open(args.config, 'r') as f:
+        try:
+            new_config = json.load(f)
+            for key, value in new_config.items():
+                config[key] = value
+        except (SyntaxError, json.decoder.JSONDecodeError):
+            pass
+    logger = logger_setup(config)
+    try:
+        main(config, logger)
+    except Exception as e:
+        logger.exception(f"Exception occurred during program execution, reason: {e}")
