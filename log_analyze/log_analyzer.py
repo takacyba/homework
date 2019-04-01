@@ -62,14 +62,6 @@ def find_latest_log(logger, config_file):
     except ValueError:
         logger.info('No log files')
         return 0
-    # with open(os.path.join(ROOT_DIR, config_file['LAST_CHECKED_FILE_DIR']), 'r+') as f:
-    #     last_checked_file = f.read()
-    #     if latest_file == last_checked_file:
-    #         logger.info('have already analyzed the latest log')
-    #         return 0
-    #     else:
-    #         f.seek(0)
-    #         f.write(latest_file)
     logger.info(f'found the new last file: {latest_file}')
     return os.path.join(log_dir, latest_file)
 
@@ -166,12 +158,10 @@ def generate_report(logger, config_file, table, file_name):
 
     """
     logger.info('start generate report')
-    file = (re.findall('\d+', file_name))
-    date_obj = datetime.strptime(file[0], '%Y%m%d')
-    file = 'report-{:4d}.{:02d}.{:02d}.html'.format(date_obj.date().year, date_obj.date().month, date_obj.date().day)
-    samle_path = os.path.join(ROOT_DIR, config_file['REPORT_SAMPLE'])
+    file = generate_report_name(file_name)
+    sample_path = os.path.join(ROOT_DIR, config_file['REPORT_SAMPLE'])
     report_path = os.path.join(ROOT_DIR, config_file['REPORT_DIR'], file)
-    with open(samle_path, 'r') as f:
+    with open(sample_path, 'r') as f:
         with open(report_path, "w") as f1:
             content = f.read()
             tpl = Template(content)
@@ -180,10 +170,23 @@ def generate_report(logger, config_file, table, file_name):
             logger.info(f'have successfully formed a report to the path {report_path}')
 
 
+def generate_report_name(file_name):
+    file = re.findall('\d+', file_name)
+    date_obj = datetime.strptime(file[0], '%Y%m%d')
+    file = f'report-{date_obj.strftime("%Y")}.{date_obj.strftime("%m")}.{date_obj.strftime("%d")}.html'
+    return file
+
+
+def report_is_exist(config_file, file_name):
+    file = generate_report_name(file_name)
+    return os.path.exists(os.path.join(ROOT_DIR, config_file['REPORT_DIR'], file))
+
+
 def main(config_file, logger):
     config_file = config_file
     latest_file = find_latest_log(logger, config_file)
-    if not latest_file:
+    if report_is_exist(config_file, latest_file):
+        logger.info('have already analyzed the latest log')
         return
     urls, summary_lines, requests_time = parse_log(logger, config_file, latest_file)
     metrics = calculate_report_metrics(logger, config_file, urls, summary_lines, requests_time)
