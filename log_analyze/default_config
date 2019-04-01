@@ -1,5 +1,5 @@
 {
     "REPORT_SIZE": 1000,
     "LOG_DIR": "resources/LOG_DIR/",
-    'REPORT_DIR': "resources/REPORTS_DIR/"
+    "REPORT_DIR": "resources/REPORTS_DIR/"
 }

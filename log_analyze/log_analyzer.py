@@ -1,6 +1,8 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import logging
+import argparse
+import json
 import os
 import sys
 import re
@@ -60,14 +62,14 @@ def find_latest_log(logger, config_file):
     except ValueError:
         logger.info('No log files')
         return 0
-    with open(os.path.join(ROOT_DIR, config_file['LAST_CHECKED_FILE_DIR']), 'r+') as f:
-        last_checked_file = f.read()
-        if latest_file == last_checked_file:
-            logger.info('have already analyzed the latest log')
-            return 0
-        else:
-            f.seek(0)
-            f.write(latest_file)
+    # with open(os.path.join(ROOT_DIR, config_file['LAST_CHECKED_FILE_DIR']), 'r+') as f:
+    #     last_checked_file = f.read()
+    #     if latest_file == last_checked_file:
+    #         logger.info('have already analyzed the latest log')
+    #         return 0
+    #     else:
+    #         f.seek(0)
+    #         f.write(latest_file)
     logger.info(f'found the new last file: {latest_file}')
     return os.path.join(log_dir, latest_file)
 
@@ -86,12 +88,11 @@ def parse_log(logger, config_file, file):
 
     """
     logger.info(f'starting to parse the file {file}')
-    command = 'gzip.open' if file.endswith('.gz') else 'open'
-    logger.info(f'reading file with method {command}')
+    opener = gzip.open if file.endswith('.gz') else open
     urls = {}
     line_format = re.compile(
         b'.*((\"(GET|POST|PUT|HEAD) )(?P<url>.+)(http\/1\.[0-1]")).* (?P<request_time>\d+\.\d+)', re.IGNORECASE)
-    with eval(command)(file, 'rb') as f:
+    with opener(file, 'rb') as f:
         logger.info('successfully read the file, start parsing')
         counter = 0
         summary_lines = 0
@@ -203,7 +204,7 @@ if __name__ == '__main__':
                 param_value = os.path.join(ROOT_DIR, 'default_config')
             with open(param_value, 'r') as f:
                 try:
-                    new_config = eval(f.read())
+                    new_config = json.load(f)
                     for key, value in new_config.items():
                         config[key] = value
                 except SyntaxError:
