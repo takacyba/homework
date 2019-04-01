@@ -15,43 +15,46 @@ class TestLogAnalyzer(unittest.TestCase):
         logger = logger_setup(self.config)
         assert isinstance(logger, logging.Logger)
 
-    def test_find_latest_log_no_new_logs(self):
-        assert find_latest_log(self.logger, self.config) is 0
+    def test_report_is_exist_true(self):
+        assert report_is_exist(self.config, os.path.join(ROOT_DIR, self.config['LOG_DIR'], self.file_name))
+
+    def test_report_is_exist_false(self):
+        assert not report_is_exist(self.config, os.path.join(ROOT_DIR, self.config['LOG_DIR'],
+                                                             "nginx-access-ui.log-20170529.gz"))
 
     def test_find_latest_log_no_files(self):
         conf = self.config
         conf['LOG_DIR'] = 'tests/resources/LOG_DIR_2/'
-        assert find_latest_log(self.logger, conf) is 0
+        assert not find_latest_log(self.logger, conf)
 
     def test_find_latest_log_success(self):
-        conf = self.config
-        conf['LAST_CHECKED_FILE_DIR'] = 'tests/resources/checked_files/last_checked_file_2'
-        open(os.path.join(ROOT_DIR, conf['LAST_CHECKED_FILE_DIR']), 'w').close()
-        assert find_latest_log(self.logger, conf) == os.path.join(ROOT_DIR, conf['LOG_DIR'], self.file_name)
+        assert find_latest_log(self.logger, self.config) == \
+               os.path.join(ROOT_DIR, self.config['LOG_DIR'], self.file_name)
 
-    def test_parse_log_assert_value_error(self):
+    def test_aggregate_parse_values_assert_value_error(self):
         conf = self.config
         conf['MAX_DROP'] = 0
         with self.assertRaises(ValueError):
-            parse_log(self.logger, conf, os.path.join(ROOT_DIR, conf['LOG_DIR'], self.file_name))
+            aggregate_parse_values(self.logger, conf, os.path.join(ROOT_DIR, conf['LOG_DIR'], self.file_name))
 
-    def test_parse_log_urls(self):
+    def test_aggregate_parse_values_urls(self):
         test_urls = {'/api/v2/banner/25019354 ': [0.39, 0.39, 0.39],
                      '/api/1/photogenic_banners/list/?server_name=WIN7RB4 ': [0.133],
                      '/api/v2/banner/16852664 ': [0.199]}
         urls, summary_lines, requests_time = \
-            parse_log(self.logger, self.config, os.path.join(ROOT_DIR, self.config['LOG_DIR'], self.file_name))
+            aggregate_parse_values(self.logger, self.config,
+                                   os.path.join(ROOT_DIR, self.config['LOG_DIR'], self.file_name))
         assert urls == test_urls
 
-    def test_parse_log_summary_lines(self):
+    def test_aggregate_parse_values_summary_lines(self):
 
-        urls, summary_lines, requests_time = \
-            parse_log(self.logger, self.config, os.path.join(ROOT_DIR, self.config['LOG_DIR'], self.file_name))
+        urls, summary_lines, requests_time = aggregate_parse_values(
+            self.logger, self.config, os.path.join(ROOT_DIR, self.config['LOG_DIR'], self.file_name))
         assert summary_lines is 6
 
-    def test_parse_log_request_time(self):
-        urls, summary_lines, requests_time = \
-            parse_log(self.logger, self.config, os.path.join(ROOT_DIR, self.config['LOG_DIR'], self.file_name))
+    def test_aggregate_parse_values_request_time(self):
+        urls, summary_lines, requests_time = aggregate_parse_values(
+            self.logger, self.config, os.path.join(ROOT_DIR, self.config['LOG_DIR'], self.file_name))
         assert requests_time == 1.5020000000000002
 
     def test_calculate_report_metrics_success(self):
@@ -105,3 +108,15 @@ class TestLogAnalyzer(unittest.TestCase):
                 "'time_avg': 0.199, 'time_max': 0.199, 'time_med': 0.199, 'count_perc': 16.667, 'time_perc': 13.249}];"
         with open(result_report, 'r') as f:
             assert value in f.read()
+
+    def test_parse_log(self):
+        gen = parse_log(self.logger, os.path.join(ROOT_DIR, self.config['LOG_DIR'], self.file_name))
+        summary_lines = parsed_lines = 0
+        for i, j, x in gen:
+            summary_lines = j
+            parsed_lines = x
+        assert summary_lines == 6 and parsed_lines == 5
+
+    def test_generate_report_name(self):
+        report_name = generate_report_name(self.file_name)
+        assert report_name == 'report-2017.06.30.html'

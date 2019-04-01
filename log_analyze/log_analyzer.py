@@ -17,8 +17,7 @@ config = {
     'REPORT_DIR': 'resources/REPORTS_DIR/',
     'REPORT_SAMPLE': 'resources/REPORT_SAMPLE/report.html',
     'LOG_DIR': 'resources/LOG_DIR/',
-    'MAX_DROP': 5,
-    'LAST_CHECKED_FILE_DIR': 'last_checked_file'
+    'MAX_DROP': 5
 }
 
 
@@ -67,11 +66,10 @@ def find_latest_log(logger, config_file):
     return latest_file_path
 
 
-def parse_log(logger, config_file, file):
+def parse_log(logger, file):
     """function of parsing the specified nginx file.
     Args:
         logger (instance): logger instance.
-        config_file (dict): dict with parameters for searching.
         file (str): parsing file path.
 
     Returns:
@@ -101,7 +99,7 @@ def aggregate_parse_values(logger, config_file, file):
     requests_time = 0
     cnt = 0
     lines = 0
-    for data, summary_lines, parsed_lines in parse_log(logger, config, file):
+    for data, summary_lines, parsed_lines in parse_log(logger, file):
         lines = summary_lines
         cnt = parsed_lines
         datadict = data.groupdict()
