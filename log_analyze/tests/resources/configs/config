@@ -1,7 +1,7 @@
 {
-    'REPORT_SIZE': 1000,
-    'REPORT_DIR': 'tests/resources/REPORTS_DIR/',
-    'REPORT_SAMPLE': 'resources/REPORT_SAMPLE/report.html',
-    'LOG_DIR': 'tests/resources/LOG_DIR/',
-    'MAX_DROP': 20
+    "REPORT_SIZE": 1000,
+    "REPORT_DIR": "tests/resources/REPORTS_DIR/",
+    "REPORT_SAMPLE": "resources/REPORT_SAMPLE/report.html",
+    "LOG_DIR": "tests/resources/LOG_DIR/",
+    "MAX_DROP": 20
 }

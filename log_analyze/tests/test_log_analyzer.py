@@ -1,4 +1,5 @@
 import unittest
+import json
 from log_analyze.log_analyzer import *
 from log_analyze.definitions import ROOT_DIR
 
@@ -7,8 +8,10 @@ class TestLogAnalyzer(unittest.TestCase):
 
     def setUp(self):
         with open(os.path.join(ROOT_DIR, 'tests/resources/configs/config'), 'r') as f:
-            self.config = eval(f.read())
+            self.config = json.load(f)
         self.file_name = 'nginx-access-ui.log-20170630'
+        self.file_date = datetime.datetime.strptime('20170630', '%Y%m%d').date()
+        self.file_date_not = datetime.datetime.strptime('20170701', '%Y%m%d').date()
         self.logger = logger_setup(self.config)
 
     def test_logger_setup_method_return(self):
@@ -16,11 +19,12 @@ class TestLogAnalyzer(unittest.TestCase):
         assert isinstance(logger, logging.Logger)
 
     def test_report_is_exist_true(self):
-        assert report_is_exist(self.config, os.path.join(ROOT_DIR, self.config['LOG_DIR'], self.file_name))
+        assert report_is_exist(self.config, self.file_date)
 
     def test_report_is_exist_false(self):
-        assert not report_is_exist(self.config, os.path.join(ROOT_DIR, self.config['LOG_DIR'],
-                                                             "nginx-access-ui.log-20170529.gz"))
+        a = report_is_exist(self.config, self.file_date)
+        print(a)
+        assert not report_is_exist(self.config, self.file_date_not)
 
     def test_find_latest_log_no_files(self):
         conf = self.config
@@ -28,7 +32,7 @@ class TestLogAnalyzer(unittest.TestCase):
         assert not find_latest_log(self.logger, conf)
 
     def test_find_latest_log_success(self):
-        assert find_latest_log(self.logger, self.config) == \
+        assert find_latest_log(self.logger, self.config).filename == \
                os.path.join(ROOT_DIR, self.config['LOG_DIR'], self.file_name)
 
     def test_aggregate_parse_values_assert_value_error(self):
@@ -95,7 +99,7 @@ class TestLogAnalyzer(unittest.TestCase):
         result_report = os.path.join(ROOT_DIR, self.config['REPORT_DIR'], 'report-2017.06.30.html')
         if os.path.exists(result_report):
             os.remove(result_report)
-        generate_report(self.logger, self.config, table, os.path.join(ROOT_DIR, self.config['LOG_DIR'], self.file_name))
+        generate_report(self.logger, self.config, table, self.file_date)
         assert os.path.exists(result_report)
 
     def test_generate_report_table_substitution(self):
@@ -118,5 +122,17 @@ class TestLogAnalyzer(unittest.TestCase):
         assert summary_lines == 6 and parsed_lines == 5
 
     def test_generate_report_name(self):
-        report_name = generate_report_name(self.file_name)
+        report_name = generate_report_name(self.file_date)
+        print(report_name)
         assert report_name == 'report-2017.06.30.html'
+
+    def test_update_config(self):
+        config = {
+            'REPORT_SIZE': 50,
+            'MAX_DROP': 5
+        }
+        update_config(os.path.join(ROOT_DIR, 'tests/resources/configs/config'), config)
+        expected_config = \
+            {'REPORT_SIZE': 1000, 'MAX_DROP': 20, 'REPORT_DIR': 'tests/resources/REPORTS_DIR/',
+             'REPORT_SAMPLE': 'resources/REPORT_SAMPLE/report.html', 'LOG_DIR': 'tests/resources/LOG_DIR/'}
+        assert config == expected_config
