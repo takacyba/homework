@@ -12,6 +12,8 @@ from collections import namedtuple
 from string import Template
 from log_analyze.definitions import ROOT_DIR
 
+
+logger = logging.getLogger('DefaultLogger')
 config = {
     'REPORT_SIZE': 1000,
     'REPORT_DIR': 'resources/REPORTS_DIR/',
@@ -19,6 +21,8 @@ config = {
     'LOG_DIR': 'resources/LOG_DIR/',
     'MAX_DROP': 5
 }
+
+LogFile = namedtuple('LogFile', ['name', 'date'])
 
 
 def update_config(new_config_path, default_config):
@@ -39,14 +43,13 @@ def logger_setup(config_file):
     file = config_file.get('LOG_FILENAME')
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.DEBUG)
-    logging.basicConfig(filename=file, format='[%(asctime)s] %(levelname).1s %(message)s', datefmt= '%Y.%m.%d %H:%M:%S')
+    logging.basicConfig(filename=file, format='[%(asctime)s] %(levelname).1s %(message)s', datefmt='%Y.%m.%d %H:%M:%S')
     return logger
 
 
-def find_latest_log(logger, config_file):
+def find_latest_log(config_file):
     """search function of the most current log in a given directory.
     Args:
-        logger (instance): logger instance.
         config_file (dict): dict with parameters for searching.
 
     Returns:
@@ -60,24 +63,25 @@ def find_latest_log(logger, config_file):
     regex = re.compile('nginx-access-ui.log-(?P<date>\d+).*(?:gz|$)')
     latest_date = datetime.date.min
     latest_file = ''
-    for i in os.listdir(log_dir):
-        data = re.search(regex, i)
-        if data:
-            date = datetime.datetime.strptime(data['date'], '%Y%m%d').date()
-            if date > latest_date:
-                latest_date = date
-                latest_file = os.path.join(log_dir, i)
-    if latest_date > datetime.date.min:
-        file_tuple = namedtuple('Latest_File', ['filename', 'filedate'])
-        last_log = file_tuple(latest_file, latest_date)
-        logger.info(f'found the new last file: {latest_file}')
-        return last_log
+    if os.path.exists(log_dir):
+        for i in os.listdir(log_dir):
+            data = re.search(regex, i)
+            if data:
+                date = datetime.datetime.strptime(data['date'], '%Y%m%d').date()
+                if date > latest_date:
+                    latest_date = date
+                    latest_file = os.path.join(log_dir, i)
+        if latest_date > datetime.date.min:
+
+            last_log = LogFile(latest_file, latest_date)
+            logger.info(f'found the new last file: {latest_file}')
+            return last_log
+    logger.info(f'directory {log_dir} does not exist')
 
 
-def parse_log(logger, file):
+def parse_log(file):
     """function of parsing the specified nginx file.
     Args:
-        logger (instance): logger instance.
         file (str): parsing file path.
 
     Returns:
@@ -102,14 +106,12 @@ def parse_log(logger, file):
                 yield data, summary_lines, parsed_lines
 
 
-def aggregate_parse_values(logger, config_file, file):
+def aggregate_parse_values(config_file, log_parser):
     urls = {}
     requests_time = 0
-    cnt = 0
-    lines = 0
-    for data, summary_lines, parsed_lines in parse_log(logger, file):
-        lines = summary_lines
-        cnt = parsed_lines
+    parsed_lines = 0
+    summary_lines = 0
+    for data, summary_lines, parsed_lines in log_parser:
         datadict = data.groupdict()
         url = datadict["url"].decode('UTF-8')
         request_time = float(datadict["request_time"])
@@ -118,20 +120,20 @@ def aggregate_parse_values(logger, config_file, file):
             urls[url].append(request_time)
         except KeyError:
             urls[url] = [request_time]
-    dropped = round((lines-cnt) / lines * 100, 3)
+    dropped = round((summary_lines-parsed_lines) / summary_lines * 100, 3)
     max_drop = config_file['MAX_DROP']
     if dropped > max_drop:
-        logger.error(f'found more errors: {dropped}% than allowed:{max_drop}%')
-        raise ValueError
+        error_msg = f'found more errors: {dropped}% than allowed:{max_drop}%'
+        logger.error(error_msg)
+        raise RuntimeError(error_msg)
     else:
         logger.info(f'founded {dropped}% errors, it is ok, allowed:{max_drop}%')
-    return urls, lines, requests_time
+    return urls, summary_lines, requests_time
 
 
-def calculate_report_metrics(logger, config_file, urls, summary_lines, requests_time):
+def calculate_report_metrics(config_file, urls, summary_lines, requests_time):
     """function that calculates different metrics for each url.
     Args:
-        logger (instance): logger instance.
         config_file (dict): dict with parameters for searching.
         urls (dict): dict with unique urls and their request times.
         summary_lines (int): count of lines in file
@@ -162,17 +164,16 @@ def calculate_report_metrics(logger, config_file, urls, summary_lines, requests_
     return table
 
 
-def generate_report(logger, config_file, table, file_date):
+def generate_report(config_file, table, file_date):
     """function that generate report with bad request time urls.
     Args:
-        logger (instance): logger instance.
         config_file (dict): dict with parameters for searching.
         table (list): with dicts of urls and their metrics values.
         file_date (date): date of latest log file.
 
     """
     logger.info('start generate report')
-    file = generate_report_name(file_date)
+    file = f'report-{file_date.strftime("%Y")}.{file_date.strftime("%m")}.{file_date.strftime("%d")}.html'
     sample_path = os.path.join(ROOT_DIR, config_file['REPORT_SAMPLE'])
     report_path = os.path.join(ROOT_DIR, config_file['REPORT_DIR'], file)
     with open(sample_path, 'r') as f:
@@ -184,27 +185,23 @@ def generate_report(logger, config_file, table, file_date):
             logger.info(f'have successfully formed a report to the path {report_path}')
 
 
-def generate_report_name(file_date):
-    file = f'report-{file_date.strftime("%Y")}.{file_date.strftime("%m")}.{file_date.strftime("%d")}.html'
-    return file
-
-
 def report_is_exist(config_file, file_date):
-    file = generate_report_name(file_date)
+    file = f'report-{file_date.strftime("%Y")}.{file_date.strftime("%m")}.{file_date.strftime("%d")}.html'
     return os.path.exists(os.path.join(ROOT_DIR, config_file['REPORT_DIR'], file))
 
 
-def main(config_file, logger):
-    last_log_tuple = find_latest_log(logger, config_file)
+def main(config_file):
+    last_log_tuple = find_latest_log(config_file)
     if not last_log_tuple:
         logger.info('No log files')
         return
-    if report_is_exist(config_file, last_log_tuple.filedate):
+    if report_is_exist(config_file, last_log_tuple.date):
         logger.info('have already analyzed the latest log')
         return
-    urls, summary_lines, requests_time = aggregate_parse_values(logger, config_file, last_log_tuple.filename)
-    metrics = calculate_report_metrics(logger, config_file, urls, summary_lines, requests_time)
-    generate_report(logger, config_file, metrics, last_log_tuple.filedate)
+    log_parser = parse_log(last_log_tuple.name)
+    urls, summary_lines, requests_time = aggregate_parse_values(config_file, log_parser)
+    metrics = calculate_report_metrics(config_file, urls, summary_lines, requests_time)
+    generate_report(config_file, metrics, last_log_tuple.date)
 
 
 if __name__ == '__main__':
@@ -214,6 +211,6 @@ if __name__ == '__main__':
     update_config(args.config, config)
     logger = logger_setup(config)
     try:
-        main(config, logger)
+        main(config)
     except Exception as e:
         logger.exception(f"Exception occurred during program execution, reason: {e}")
