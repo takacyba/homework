@@ -63,20 +63,21 @@ def find_latest_log(config_file):
     regex = re.compile('nginx-access-ui.log-(?P<date>\d+).*(?:gz|$)')
     latest_date = datetime.date.min
     latest_file = ''
-    if os.path.exists(log_dir):
-        for i in os.listdir(log_dir):
-            data = re.search(regex, i)
-            if data:
-                date = datetime.datetime.strptime(data['date'], '%Y%m%d').date()
-                if date > latest_date:
-                    latest_date = date
-                    latest_file = os.path.join(log_dir, i)
-        if latest_date > datetime.date.min:
+    if not os.path.exists(log_dir):
+        logger.info(f'directory {log_dir} does not exist')
+        return None
+    for i in os.listdir(log_dir):
+        data = re.search(regex, i)
+        if data:
+            date = datetime.datetime.strptime(data['date'], '%Y%m%d').date()
+            if date > latest_date:
+                latest_date = date
+                latest_file = os.path.join(log_dir, i)
+    if latest_date > datetime.date.min:
 
-            last_log = LogFile(latest_file, latest_date)
-            logger.info(f'found the new last file: {latest_file}')
-            return last_log
-    logger.info(f'directory {log_dir} does not exist')
+        last_log = LogFile(latest_file, latest_date)
+        logger.info(f'found the new last file: {latest_file}')
+        return last_log
 
 
 def parse_log(file):
